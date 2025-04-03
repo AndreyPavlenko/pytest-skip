@@ -1,0 +1,55 @@
+name: Build and test
+run-name: ${{ inputs.run_name }}
+
+on:
+  workflow_dispatch:
+
+  pull_request:
+    branches:
+      - main
+      - release/**
+
+  push:
+    branches:
+      - main
+
+permissions: read-all
+
+jobs:
+
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run pre-commit checks
+        run: |
+          pip install --upgrade pre-commit
+          python3 -m pre_commit run --show-diff-on-failure --color=always --all-files --verbose
+
+      - name: Run unit tests without xdist
+        run: |
+          pip install .
+          pytest tests/
+
+      - name: Run unit tests with xdist
+        run: |
+          pip install pytest-xdist
+          pytest -n 2 tests/
+
+      - name: Check coexistence with pytest-select plugin
+        id: test_with_pytest_select
+        continue-on-error: true
+        run: |
+          pip install pytest-select
+          pytest tests/

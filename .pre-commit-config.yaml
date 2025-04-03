@@ -1,0 +1,64 @@
+default_stages: [pre-commit, pre-push, manual]
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-symlinks
+      - id: destroyed-symlinks
+      - id: trailing-whitespace
+        exclude: .*.patch
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-ast
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: detect-private-key
+      - id: debug-statements
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.3
+    hooks:
+      - id: ruff
+        # files: '(^pytest_skip|^tests)/.*'
+        args: ["--fix", "--exit-non-zero-on-fix"]
+
+  - repo: https://github.com/google/yapf
+    rev: v0.43.0
+    hooks:
+      - id: yapf
+        args: ["-p", "-i", "--style", "{based_on_style: pep8, column_limit: 100}"]
+
+  - repo: https://github.com/pycqa/pylint
+    rev: v3.3.6
+    hooks:
+      - id: pylint
+        args:
+          - --check-quote-consistency=true
+          - --max-line-length=120
+          # Disable line-too-long: rely on ruff's check for line length
+          - --disable=line-too-long
+          # Disable import-error: not everything can be imported when pre-commit runs
+          - --disable=import-error
+          - --disable=no-name-in-module
+          - --disable=missing-module-docstring
+          - --disable=missing-function-docstring
+          - --disable=missing-class-docstring
+          - --disable=fixme
+        stages: [pre-commit, pre-push, manual]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        name: mypy
+        stages: [pre-commit, pre-push, manual]
+
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.8.3
+
+    hooks:
+      - id: bandit
+        files: '(^pytest_skip)/.*'
