@@ -1,8 +1,7 @@
 pytest-skip
 =============
 
-
-This is a `pytest`_ plugin which allows to (de-)select or skip tests by name from a list loaded from a file.
+This is a [pytest](https://pytest.org) plugin which allows to (de-)select or skip tests by name from a list loaded from a file.
 
 pytest-skip expands upon the capabilities of the original [pytest-select](https://github.com/ulope/pytest-select) plugin
 by adding
@@ -10,8 +9,6 @@ by adding
 - support to (de-)select or skip parametrized tests without needing to specify test instance qualifiers
 - support for blank and comment lines in the selection files
 - better integration with the `pytest-xdist`, plugin warning and error messages are passed to the master node with proper stdout or stderr outputs
-
-.. _pytest: https://pytest.org
 
 
 Usage
