@@ -9,6 +9,7 @@ by adding
 - support to (de-)select or skip parametrized tests without needing to specify test instance qualifiers
 - support for blank and comment lines in the selection files
 - better integration with the `pytest-xdist`, plugin warning and error messages are passed to the master node with proper stdout or stderr outputs
+- an ability to skip tests matching a certain regexp (the skipline should start with `@regexp:`)
 
 
 Usage
@@ -40,6 +41,7 @@ Example::
     test_parametrized[1]
     test_parametrized
     tests/test_foo.py::test_other
+    @regexp:test_parametrized_complex\[[8|16]-.*-.*\]
 
     $~ pytest --select-from-file selection.txt
     $~ pytest --deselect-from-file selection.txt

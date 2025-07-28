@@ -23,9 +23,11 @@ class SelectConfig:
     file_path: Optional[str]
     fail_on_missing: bool
     test_names: set[str] = field(default_factory=set)
+    test_regexps: set[str] = field(default_factory=set)
     seen_test_names: set[str] = field(default_factory=set)
 
     variant_pattern: ClassVar[Pattern] = re.compile(r"^(.*?)\[(.+)\]$")
+    test_regexp_prefix: ClassVar[str] = "@regexp:"
 
     def __post_init__(self):
         if self.file_path and not Path(self.file_path).exists():
@@ -35,13 +37,22 @@ class SelectConfig:
                 test_name = test_name_raw.strip()
                 if test_name.startswith("#") or test_name == "":
                     continue
-                self.test_names.add(test_name)
+                if test_name.startswith(self.test_regexp_prefix):
+                    self.test_regexps.add(test_name[len(self.test_regexp_prefix):])
+                else:
+                    self.test_names.add(test_name)
 
     def no_test_items_match(self, name, nodeid, mark_as_seen_if_match=True) -> bool:
         variant_match = self.variant_pattern.findall(nodeid)
         item_path = variant_match[0][0] if len(variant_match) == 1 else nodeid
         match = (name in self.test_names or nodeid in self.test_names
                  or item_path in self.test_names)
+        if not match:
+            for regexp in self.test_regexps:
+                match = (re.match(regexp, name) or re.match(regexp, nodeid)
+                         or re.match(regexp, item_path))
+                if match:
+                    break
         if not match:
             return True
         if mark_as_seen_if_match:

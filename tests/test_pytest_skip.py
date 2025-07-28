@@ -186,6 +186,25 @@ def test_missing_selection_file_fails(testdir, option_name):
                 r"\s+- test_that_does_not_exist",
             ],
         ),
+        (
+            SKIP_OPT,
+            [r"@regexp:test_a\[1-.*\]"],
+            0,
+            {
+                "skipped": 4
+            },
+            [],
+        ),
+        (
+            SKIP_OPT,
+            [r"@regexp:test_a\[.*-[2|3]\]"],
+            0,
+            {
+                "passed": 2,
+                "skipped": 2
+            },
+            [],
+        ),
     ),
 )
 def test_tests_are_selected(  # pylint: disable=R0913, disable=R0917
