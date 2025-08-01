@@ -23,11 +23,13 @@ class SelectConfig:
     file_path: Optional[str]
     fail_on_missing: bool
     test_names: set[str] = field(default_factory=set)
-    test_regexps: set[str] = field(default_factory=set)
+    test_regexps: dict[str, Pattern] = field(default_factory=dict)
     seen_test_names: set[str] = field(default_factory=set)
 
     variant_pattern: ClassVar[Pattern] = re.compile(r"^(.*?)\[(.+)\]$")
-    test_regexp_prefix: ClassVar[str] = "@regexp:"
+
+    regexp_test_name_suffix: ClassVar[str] = "@regexp"
+    regexp_test_name_pattern: ClassVar[Pattern] = re.compile(r"^(.*)\[r\"(.*?)\"\]@regexp$")
 
     def __post_init__(self):
         if self.file_path and not Path(self.file_path).exists():
@@ -37,22 +39,36 @@ class SelectConfig:
                 test_name = test_name_raw.strip()
                 if test_name.startswith("#") or test_name == "":
                     continue
-                if test_name.startswith(self.test_regexp_prefix):
-                    self.test_regexps.add(test_name[len(self.test_regexp_prefix):])
+
+                # Check if the line has the regexp suffix before matching
+                # the whole pattern. Saves time on huge skip-lists
+                if test_name.endswith(self.regexp_test_name_suffix):
+                    match = re.match(self.regexp_test_name_pattern, test_name)
+                    if match is None:
+                        warnings.warn()
+                        self.test_names.add(test_name)
+                    else:
+                        test_name, regexp = match.groups()
+                        self.test_regexps[test_name] = regexp
                 else:
                     self.test_names.add(test_name)
 
     def no_test_items_match(self, name, nodeid, mark_as_seen_if_match=True) -> bool:
-        variant_match = self.variant_pattern.findall(nodeid)
-        item_path = variant_match[0][0] if len(variant_match) == 1 else nodeid
+        nodeid_match = self.variant_pattern.findall(nodeid)
+        name_match = self.variant_pattern.findall(name)
+        # path/test.py::test_name[params] -> (path/test.py::test_name, params)
+        item_path, item_param = nodeid_match[0] if len(nodeid_match) == 1 else (nodeid, "")
+        # test_name[params] -> (test_name, params)
+        item_name, _ = name_match[0] if len(name_match) == 1 else (name, "")
+
         match = (name in self.test_names or nodeid in self.test_names
                  or item_path in self.test_names)
-        if not match:
-            for regexp in self.test_regexps:
-                match = (re.match(regexp, name) or re.match(regexp, nodeid)
-                         or re.match(regexp, item_path))
-                if match:
-                    break
+
+        param_regexp = self.test_regexps.get(item_path)
+        if param_regexp is None:
+            param_regexp = self.test_regexps.get(item_name)
+        if not match and param_regexp is not None:
+            match = re.match(param_regexp, item_param) is not None
         if not match:
             return True
         if mark_as_seen_if_match:
