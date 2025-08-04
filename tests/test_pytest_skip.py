@@ -232,6 +232,20 @@ def test_missing_selection_file_fails(testdir, option_name):
             },
             [],
         ),
+        (
+            SKIP_OPT,
+            [
+                "test_a[r\"1-1\"]@regexp",
+                "{testfile}::test_a[r\"1-2\"]@regexp",
+                "test_a[r\".*-3\"]@regexp",
+            ],
+            0,
+            {
+                "passed": 1,
+                "skipped": 3
+            },
+            [],
+        ),
     ),
 )
 def test_tests_are_selected(  # pylint: disable=R0913, disable=R0917

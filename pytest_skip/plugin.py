@@ -23,8 +23,8 @@ class SelectConfig:
     file_path: Optional[str]
     fail_on_missing: bool
     test_names: set[str] = field(default_factory=set)
-    # dict["path/test.py::test"] -> ".*-int32"
-    test_regexps: dict[str, Pattern] = field(default_factory=dict)
+    # dict["path/test.py::test"] -> [".*-int32"]
+    test_regexps: dict[str, set[Pattern]] = field(default_factory=dict)
     seen_test_names: set[str] = field(default_factory=set)
 
     variant_pattern: ClassVar[Pattern] = re.compile(r"^(.*?)\[(.+)\]$")
@@ -54,7 +54,9 @@ class SelectConfig:
                         self.test_names.add(test_name[:-len(self.regexp_test_name_suffix)])
                     else:
                         test_name, regexp = match.groups()
-                        self.test_regexps[test_name] = regexp
+                        regexps_list = self.test_regexps.get(test_name, set())
+                        regexps_list.add(regexp)
+                        self.test_regexps[test_name] = regexps_list
                 else:
                     self.test_names.add(test_name)
 
@@ -69,11 +71,13 @@ class SelectConfig:
         match = (name in self.test_names or nodeid in self.test_names
                  or item_path in self.test_names)
 
-        param_regexp = self.test_regexps.get(item_path)
-        if param_regexp is None:
-            param_regexp = self.test_regexps.get(item_name)
-        if not match and param_regexp is not None:
-            match = re.match(param_regexp, item_param) is not None
+        if not match:
+            param_regexps = self.test_regexps.get(item_path, set())
+            param_regexps |= self.test_regexps.get(item_name, set())
+            for regexp in param_regexps:
+                match = re.match(regexp, item_param) is not None
+                if match:
+                    break
         if not match:
             return True
         if mark_as_seen_if_match:
