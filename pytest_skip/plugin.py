@@ -55,7 +55,7 @@ class SelectConfig:
                     else:
                         test_name, regexp = match.groups()
                         regexps_list = self.test_regexps.get(test_name, set())
-                        regexps_list.add(regexp)
+                        regexps_list.add(re.compile(regexp))
                         self.test_regexps[test_name] = regexps_list
                 else:
                     self.test_names.add(test_name)
