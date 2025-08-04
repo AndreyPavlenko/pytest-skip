@@ -23,6 +23,7 @@ class SelectConfig:
     file_path: Optional[str]
     fail_on_missing: bool
     test_names: set[str] = field(default_factory=set)
+    # dict["path/test.py::test"] -> ".*-int32"
     test_regexps: dict[str, Pattern] = field(default_factory=dict)
     seen_test_names: set[str] = field(default_factory=set)
 
@@ -45,8 +46,12 @@ class SelectConfig:
                 if test_name.endswith(self.regexp_test_name_suffix):
                     match = re.match(self.regexp_test_name_pattern, test_name)
                     if match is None:
-                        warnings.warn()
-                        self.test_names.add(test_name)
+                        warnings.warn(
+                            f"The skipline '{test_name}' has a regexp "
+                            "suffix but doesn't contain an actual regexp. The line will be "
+                            "treated as a non-regexp."
+                        )
+                        self.test_names.add(test_name[:-len(self.regexp_test_name_suffix)])
                     else:
                         test_name, regexp = match.groups()
                         self.test_regexps[test_name] = regexp
@@ -58,8 +63,8 @@ class SelectConfig:
         name_match = self.variant_pattern.findall(name)
         # path/test.py::test_name[params] -> (path/test.py::test_name, params)
         item_path, item_param = nodeid_match[0] if len(nodeid_match) == 1 else (nodeid, "")
-        # test_name[params] -> (test_name, params)
-        item_name, _ = name_match[0] if len(name_match) == 1 else (name, "")
+        # test_name[params] -> test_name
+        item_name = name_match[0][0] if len(name_match) == 1 else name
 
         match = (name in self.test_names or nodeid in self.test_names
                  or item_path in self.test_names)
