@@ -179,6 +179,7 @@ class SelectPlugin:
                 item.add_marker(pytest.mark.skip(reason="Deselected by pytest-skip"))
             else:
                 deselected_items.append(item)
+        self.seen_test_names = select_config.seen_test_names
         return selected_items, deselected_items
 
     def pytest_collection_modifyitems(
