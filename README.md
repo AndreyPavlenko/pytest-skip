@@ -9,6 +9,7 @@ by adding
 - support to (de-)select or skip parametrized tests without needing to specify test instance qualifiers
 - support for blank and comment lines in the selection files
 - better integration with the `pytest-xdist`, plugin warning and error messages are passed to the master node with proper stdout or stderr outputs
+- sharding functionality to distribute tests across several nodes
 
 
 Usage
@@ -20,6 +21,7 @@ This plugin adds new command line options to pytest:
 - ``--deselect-from-file``
 - ``--skip-from-file``
 - ``--select-fail-on-missing``
+- ``--num-shards`` and ``--shard-id``
 
 The first three expect an argument that resolves to a UTF-8 encoded text file containing one test name per
 line. Text file may contain blank and comment lines (starts from `#`),
@@ -27,6 +29,9 @@ line. Text file may contain blank and comment lines (starts from `#`),
 The fourth one changes the behaviour in case (de-)selected or skipped test names are missing from the to-be executed tests.
 By default a warning is emitted and the remaining selected tests are executed as normal.
 By using the ``--select-fail-on-missing`` flag this behaviour can be changed to instead abort execution in that case.
+
+The sharding parameters allow users to split the test sets into even portions across multiple shards for parallel execution.
+The tests that are filtered out for a shard will be deselected.
 
 Test names are expected in the same format as seen in the output of
 ``pytest --collect-only --quiet`` for example.
@@ -44,6 +49,7 @@ Example::
     $~ pytest --select-from-file selection.txt
     $~ pytest --deselect-from-file selection.txt
     $~ pytest --skip-from-file selection.txt
+    $~ pytest --skip-from-file selection.txt --num-shards=4 --shard-id=0
 
 
 Install from source

@@ -1,4 +1,5 @@
 import pytest
+from .conftest import SELECT_OPT, DESELECT_OPT, SKIP_OPT
 
 TEST_CONTENT = """
     import pytest
@@ -43,10 +44,6 @@ TEST_CONTENT_WITH_NESTED_BRACKETS = """
     def test_b(a, b):
         assert b in ('a[1]', '4')
 """
-
-SELECT_OPT = "--select-from-file"
-DESELECT_OPT = "--deselect-from-file"
-SKIP_OPT = "--skip-from-file"
 
 
 @pytest.mark.parametrize("option_name", (SELECT_OPT, DESELECT_OPT))

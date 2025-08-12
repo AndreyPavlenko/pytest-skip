@@ -17,6 +17,85 @@ class SelectOption(Enum):
 
 
 @dataclass
+class ShardingConfig:
+    num_shards: int
+    shard_id: int
+    items_weights: Optional[dict[str, float]]
+
+    def _even_sharding(self, selected_items: list[str], deselected_items: list[str]):
+        total = len(selected_items)
+        base_size = total // self.num_shards
+        remainder = total % self.num_shards
+
+        start = self.shard_id * base_size + min(self.shard_id, remainder)
+        end = start + base_size + (1 if self.shard_id < remainder else 0)
+
+        deselected_items.extend(selected_items[:start] + selected_items[end:])
+        selected_items = selected_items[start:end]
+
+        return selected_items, deselected_items
+
+    def _weighted_sharding(self, selected_items: list[str], deselected_items: list[str]):
+        # TODO: implement
+        raise NotImplementedError(
+            "Sharding with weights is not supported yet."
+        )
+
+    @classmethod
+    def _parse_weights(cls, weights_filepath):
+        # TODO: implement
+        raise NotImplementedError(
+            "Sharding with weights is not supported yet."
+        )
+
+    def do_sharding(self, selected_items: list[str], deselected_items: list[str]):
+        if self.items_weights is not None:
+            return self._weighted_sharding(selected_items, deselected_items)
+        return self._even_sharding(selected_items, deselected_items)
+
+    @classmethod
+    def from_config(cls, config: pytest.Config) -> Optional["ShardingConfig"]:
+        num_shards = config.getoption("num_shards")
+        shard_id = config.getoption("shard_id")
+        # weights_filepath = config.getoption("shard_weights_file")
+        weights_filepath = None
+
+        items_weights = None
+        if weights_filepath:
+            items_weights = cls._parse_weights(weights_filepath)
+
+        if (num_shards is None) != (shard_id is None):
+            num_shards = None
+            shard_id = None
+            warnings.warn(
+                UserWarning("Sharding is ignored: you have to specify both '--num-shards' and '--shard-id'")
+            )
+        
+        if num_shards is None and shard_id is None:
+            return None
+
+        try:
+            num_shards = int(num_shards)
+            shard_id = int(shard_id)
+        except ValueError as err:
+            raise ValueError(
+                "Invalid sharding configuration. '--num-shards' and '--shard-id' "
+                f"must be integers: {err}"
+            )
+
+        if num_shards <= 0:
+            raise ValueError(f"{num_shards} must be a positive number")
+
+        if shard_id >= num_shards or shard_id < 0:
+            raise ValueError(f"{shard_id=} must be positive and less than {num_shards=}")
+
+        sharding_config = None
+        if num_shards is not None and shard_id is not None:
+            sharding_config = ShardingConfig(num_shards, shard_id, items_weights)
+        return sharding_config
+
+
+@dataclass
 class SelectConfig:
     config: pytest.Config
     select_option: SelectOption
@@ -143,6 +222,20 @@ def pytest_addoption(parser):
         default=None,
         help="Mark tests from file as skipped.",
     )
+    select_group.addoption(
+        "--num-shards",
+        action="store",
+        dest="num_shards",
+        default=None,
+        help="Specify total num shards to split tests across (must be specified together with --shard-id).",
+    )
+    select_group.addoption(
+        "--shard-id",
+        action="store",
+        dest="shard_id",
+        default=None,
+        help="Specify shard id (must be specified together with --num-shards).",
+    )
 
 
 @pytest.hookimpl(trylast=True)  # pragma: no mutate
@@ -161,8 +254,9 @@ class SelectPlugin:
         self,
         select_config: SelectConfig,
         items,
-    ) -> tuple[Optional[list[str]], Optional[list[str]]]:
+    ) -> tuple[list[str], list[str], list[str]]:
         selected_items = []
+        skipped_items = []
         deselected_items = []
         option = select_config.select_option
         for item in items:
@@ -177,9 +271,10 @@ class SelectPlugin:
                 continue
             if option in [SelectOption.SKIP]:
                 item.add_marker(pytest.mark.skip(reason="Deselected by pytest-skip"))
+                skipped_items.append(item)
             else:
                 deselected_items.append(item)
-        return selected_items, deselected_items
+        return selected_items, deselected_items, skipped_items
 
     def pytest_collection_modifyitems(
         self,
@@ -189,12 +284,20 @@ class SelectPlugin:
     ):
         select_config = SelectConfig.from_config(config)
         if select_config is None:
-            return
-        selected_items, deselected_items = self._get_selections(select_config, items)
+            selected_items, deselected_items, skipped_items = items, [], []
+        else:
+            selected_items, deselected_items, skipped_items = self._get_selections(select_config, items)
 
-        if select_config.select_option in [SelectOption.SKIP]:
+        sharding_config = ShardingConfig.from_config(config)
+        if (
+            sharding_config is None and select_config is not None
+            and select_config.select_option in [SelectOption.SKIP]
+        ):
             return
-        items[:] = selected_items
+
+        if sharding_config is not None:
+            selected_items, deselected_items = sharding_config.do_sharding(selected_items, deselected_items)
+        items[:] = skipped_items + selected_items
         config.hook.pytest_deselected(items=deselected_items)
 
     def pytest_sessionfinish(self, session, exitstatus):  # pylint: disable=W0613
@@ -208,14 +311,14 @@ class SelectPlugin:
 class SelectXdistPlugin(SelectPlugin):
 
     def _get_selections(self, select_config: SelectConfig,
-                        items) -> tuple[Optional[list[str]], Optional[list[str]]]:
-        selected_items, deselected_items = super()._get_selections(select_config, items)
+                        items) -> tuple[Optional[list[str]], Optional[list[str]], Optional[list[str]]]:
+        selected_items, deselected_items, skipped_items = super()._get_selections(select_config, items)
         config = select_config.config
         if hasattr(select_config.config, "workerinput"):
             # config.workeroutput is a dict that will be transferred back to the master process
             config.workeroutput = getattr(config, "seen_test_names", {})
             config.workeroutput["seen_test_names"] = select_config.seen_test_names
-        return selected_items, deselected_items
+        return selected_items, deselected_items, skipped_items
 
     def pytest_testnodedown(self, node, error):  # pylint: disable=W0613
         if not hasattr(node, "workeroutput"):
