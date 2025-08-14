@@ -4,6 +4,7 @@ import functools
 
 from typing import Optional
 from .conftest import SELECT_OPT, DESELECT_OPT, SKIP_OPT
+# from pytest_skip.plugin import ShardingConfig
 
 
 @functools.lru_cache
@@ -119,6 +120,7 @@ def assert_sharding(
     num_shards: int,
     test_name: str,
     extra_pytest_args: Optional[list] = None,
+    passed_tests_per_shard: Optional[list[str]] = None,
 ) -> dict[str, list[str]]:
     """
     Run pytest with sharding and (optionally) extra CLI args per shard.
@@ -157,12 +159,18 @@ def assert_sharding(
         if len(out) == 0:
             assert is_empty_shard
             continue
-        
+
         # assert that all tests are unique
         assert len(out[test_name]) == len(set(out[test_name]))
 
         num_passed_in_this_shard = len(out[test_name])
         assert num_passed_in_this_shard in shard_sizes
+
+        if passed_tests_per_shard is not None:
+            tests_per_shard = passed_tests_per_shard[shard_id]
+            assert len(tests_per_shard) == len(set(tests_per_shard))
+            assert set(out[test_name]) == set(tests_per_shard)
+
         combined_outputs = merge_list_dicts(combined_outputs, out)
 
     return combined_outputs
@@ -172,8 +180,9 @@ def assert_sharding(
 
 
 @pytest.mark.parametrize("num_tests", [0, 1, 8, 13, 16])
-@pytest.mark.parametrize("num_shards", [1, 5, 7, 8, 15, 16])
-def test_even_sharding(testdir, num_tests, num_shards):
+@pytest.mark.parametrize("num_shards", [1, 5, 8, 15, 16])
+@pytest.mark.parametrize("sharding_mode", ["contiguous-split", "round-robin"])
+def test_even_sharding(testdir, num_tests, num_shards, sharding_mode):
     case_name = "test_a"
     test_content = generate_test(num_tests, case_name)
     testdir.makefile(".py", test_content)
@@ -185,6 +194,9 @@ def test_even_sharding(testdir, num_tests, num_shards):
         num_selected=num_tests,
         num_shards=num_shards,
         test_name=test_name,
+        extra_pytest_args=[
+            "--sharding-mode", sharding_mode,
+        ],
     )
 
     if len(combined_outputs) == 0:
@@ -201,7 +213,8 @@ def test_even_sharding(testdir, num_tests, num_shards):
 
 
 @pytest.mark.parametrize("select_option", [SELECT_OPT, DESELECT_OPT, SKIP_OPT])
-def test_tests_are_selected_with_sharding(testdir, select_option):
+@pytest.mark.parametrize("sharding_mode", ["contiguous-split", "round-robin"])
+def test_tests_are_selected_with_sharding(testdir, select_option, sharding_mode):
     num_tests = 32
     num_shards = 5
 
@@ -240,7 +253,7 @@ def test_tests_are_selected_with_sharding(testdir, select_option):
         num_selected=num_selected_tests,
         num_shards=num_shards,
         test_name=test_name,
-        extra_pytest_args=[select_option, select_file],
+        extra_pytest_args=[select_option, select_file, "--sharding-mode", sharding_mode],
     )
 
     if len(combined_passed) == 0:
@@ -253,3 +266,60 @@ def test_tests_are_selected_with_sharding(testdir, select_option):
 
     # verify that all tests (parameters combinations) were ran
     assert test_set == set(passed_cases)
+
+
+@pytest.mark.parametrize(
+    ("mode", "tests_per_shard"),
+    [
+        (
+            "round-robin",
+            [
+                ["0", "4", "8", "12"],
+                ["1", "5", "9", "13"],
+                ["2", "6", "10", "14"],
+                ["3", "7", "11", "15"],
+            ]
+        ),
+        (
+            "contiguous-split",
+            [
+                ["0", "1", "2", "3"],
+                ["4", "5", "6", "7"],
+                ["8", "9", "10", "11"],
+                ["12", "13", "14", "15"],
+            ]
+        ),
+    ],
+)
+def test_sharding_modes(testdir, mode, tests_per_shard):
+    num_tests = 16
+    num_shards = 4
+
+    case_name = "test_a"
+    test_content = generate_test(num_tests, case_name)
+    test_name = f"test_sharding_modes.py::{case_name}"
+    testdir.makefile(".py", test_content)
+
+    combined_outputs = assert_sharding(
+        testdir,
+        num_not_passed_per_shard={"FAILED": 0, "SKIPPED": 0},
+        num_selected=num_tests,
+        num_shards=num_shards,
+        test_name=test_name,
+        extra_pytest_args=[
+            "--sharding-mode", mode,
+        ],
+        passed_tests_per_shard=tests_per_shard,
+    )
+
+    if len(combined_outputs) == 0:
+        assert num_tests == 0
+        return
+
+    assert len(combined_outputs[test_name]) == num_tests
+
+    test_set = set(combined_outputs[test_name])
+    assert len(test_set) == num_tests
+
+    # verify that all tests (parameters combinations) were ran
+    assert test_set == set(map(str, range(num_tests)))

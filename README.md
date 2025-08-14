@@ -21,7 +21,7 @@ This plugin adds new command line options to pytest:
 - ``--deselect-from-file``
 - ``--skip-from-file``
 - ``--select-fail-on-missing``
-- ``--num-shards`` and ``--shard-id``
+- ``--num-shards``, ``--shard-id`` and ``--sharding-mode``
 
 The first three expect an argument that resolves to a UTF-8 encoded text file containing one test name per
 line. Text file may contain blank and comment lines (starts from `#`),
@@ -49,7 +49,8 @@ Example::
     $~ pytest --select-from-file selection.txt
     $~ pytest --deselect-from-file selection.txt
     $~ pytest --skip-from-file selection.txt
-    $~ pytest --skip-from-file selection.txt --num-shards=4 --shard-id=0
+    $~ pytest --skip-from-file selection.txt --num-shards=4 --shard-id=0 --sharding-mode=round-robin
+    $~ pytest --skip-from-file selection.txt --num-shards=4 --shard-id=0 --sharding-mode=contiguous-split
 
 
 Install from source

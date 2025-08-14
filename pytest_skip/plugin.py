@@ -18,11 +18,26 @@ class SelectOption(Enum):
 
 @dataclass
 class ShardingConfig:
+    class ShardingMode(Enum):
+        CONTIGUOUS_SPLIT = "contiguous-split"
+        ROUND_ROBIN = "round-robin"
+
     num_shards: int
     shard_id: int
+    mode: ShardingMode
     items_weights: Optional[dict[str, float]]
 
-    def _even_sharding(self, selected_items: list[str], deselected_items: list[str]):
+    def _round_robin_sharding(self, selected_items: list[str], deselected_items: list[str]):
+        # Round-robin sharding distributes tests evenly across shards.
+        if self.shard_id >= len(selected_items):
+            deselected_items.extend(selected_items)
+            return [], deselected_items
+
+        deselected_items.extend([item for i, item in enumerate(selected_items) if i % self.num_shards != self.shard_id])
+        selected_items = [item for i, item in enumerate(selected_items) if i % self.num_shards == self.shard_id]
+        return selected_items, deselected_items
+
+    def _contiguous_even_sharding(self, selected_items: list[str], deselected_items: list[str]):
         total = len(selected_items)
         base_size = total // self.num_shards
         remainder = total % self.num_shards
@@ -34,6 +49,14 @@ class ShardingConfig:
         selected_items = selected_items[start:end]
 
         return selected_items, deselected_items
+
+    def _even_sharding(self, selected_items: list[str], deselected_items: list[str]):
+        if self.mode == self.ShardingMode.ROUND_ROBIN.value:
+            return self._round_robin_sharding(selected_items, deselected_items)
+        elif self.mode == self.ShardingMode.CONTIGUOUS_SPLIT.value:
+            return self._contiguous_even_sharding(selected_items, deselected_items)
+        else:
+            raise ValueError(f"Unsupported sharding mode: {self.mode}")
 
     def _weighted_sharding(self, selected_items: list[str], deselected_items: list[str]):
         # TODO: implement
@@ -57,6 +80,13 @@ class ShardingConfig:
     def from_config(cls, config: pytest.Config) -> Optional["ShardingConfig"]:
         num_shards = config.getoption("num_shards")
         shard_id = config.getoption("shard_id")
+        mode = config.getoption("sharding_mode").lower().strip()
+
+        allowed_modes = {m.value for m in cls.ShardingMode}
+        if mode not in allowed_modes:
+            raise ValueError(
+                f"Invalid sharding mode: {mode}. Available modes: {', '.join(allowed_modes)}"
+            )
         # weights_filepath = config.getoption("shard_weights_file")
         weights_filepath = None
 
@@ -70,7 +100,7 @@ class ShardingConfig:
             warnings.warn(
                 UserWarning("Sharding is ignored: you have to specify both '--num-shards' and '--shard-id'")
             )
-        
+
         if num_shards is None and shard_id is None:
             return None
 
@@ -91,7 +121,7 @@ class ShardingConfig:
 
         sharding_config = None
         if num_shards is not None and shard_id is not None:
-            sharding_config = ShardingConfig(num_shards, shard_id, items_weights)
+            sharding_config = ShardingConfig(num_shards, shard_id, mode, items_weights)
         return sharding_config
 
 
@@ -235,6 +265,13 @@ def pytest_addoption(parser):
         dest="shard_id",
         default=None,
         help="Specify shard id (must be specified together with --num-shards).",
+    )
+    select_group.addoption(
+        "--sharding-mode",
+        action="store",
+        dest="sharding_mode",
+        default="round-robin",
+        help="Specify sharding mode for NON-weighted sharding. Available modes: {'contiguous-split', 'round-robin'}",
     )
 
 
