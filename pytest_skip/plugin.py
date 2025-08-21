@@ -18,6 +18,7 @@ class SelectOption(Enum):
 
 @dataclass
 class ShardingConfig:
+
     class ShardingMode(Enum):
         CONTIGUOUS_SPLIT = "contiguous-split"
         ROUND_ROBIN = "round-robin"
@@ -33,8 +34,11 @@ class ShardingConfig:
             deselected_items.extend(selected_items)
             return [], deselected_items
 
-        deselected_items.extend([item for i, item in enumerate(selected_items) if i % self.num_shards != self.shard_id])
-        selected_items = [item for i, item in enumerate(selected_items) if i % self.num_shards == self.shard_id]
+        deselected_items.extend(
+            [item for i, item in enumerate(selected_items) if i % self.num_shards != self.shard_id])
+        selected_items = [
+            item for i, item in enumerate(selected_items) if i % self.num_shards == self.shard_id
+        ]
         return selected_items, deselected_items
 
     def _contiguous_even_sharding(self, selected_items: list[str], deselected_items: list[str]):
@@ -60,16 +64,12 @@ class ShardingConfig:
 
     def _weighted_sharding(self, selected_items: list[str], deselected_items: list[str]):
         # TODO: implement
-        raise NotImplementedError(
-            "Sharding with weights is not supported yet."
-        )
+        raise NotImplementedError("Sharding with weights is not supported yet.")
 
     @classmethod
     def _parse_weights(cls, weights_filepath):
         # TODO: implement
-        raise NotImplementedError(
-            "Sharding with weights is not supported yet."
-        )
+        raise NotImplementedError("Sharding with weights is not supported yet.")
 
     def do_sharding(self, selected_items: list[str], deselected_items: list[str]):
         if self.items_weights is not None:
@@ -85,8 +85,7 @@ class ShardingConfig:
         allowed_modes = {m.value for m in cls.ShardingMode}
         if mode not in allowed_modes:
             raise ValueError(
-                f"Invalid sharding mode: {mode}. Available modes: {', '.join(allowed_modes)}"
-            )
+                f"Invalid sharding mode: {mode}. Available modes: {', '.join(allowed_modes)}")
         # weights_filepath = config.getoption("shard_weights_file")
         weights_filepath = None
 
@@ -98,7 +97,8 @@ class ShardingConfig:
             num_shards = None
             shard_id = None
             warnings.warn(
-                UserWarning("Sharding is ignored: you have to specify both '--num-shards' and '--shard-id'")
+                UserWarning(
+                    "Sharding is ignored: you have to specify both '--num-shards' and '--shard-id'")
             )
 
         if num_shards is None and shard_id is None:
@@ -108,10 +108,8 @@ class ShardingConfig:
             num_shards = int(num_shards)
             shard_id = int(shard_id)
         except ValueError as err:
-            raise ValueError(
-                "Invalid sharding configuration. '--num-shards' and '--shard-id' "
-                f"must be integers: {err}"
-            )
+            raise ValueError("Invalid sharding configuration. '--num-shards' and '--shard-id' "
+                             f"must be integers: {err}")
 
         if num_shards <= 0:
             raise ValueError(f"{num_shards} must be a positive number")
@@ -257,7 +255,8 @@ def pytest_addoption(parser):
         action="store",
         dest="num_shards",
         default=None,
-        help="Specify total num shards to split tests across (must be specified together with --shard-id).",
+        help=
+        "Specify total num shards to split tests across (must be specified together with --shard-id).",
     )
     select_group.addoption(
         "--shard-id",
@@ -271,7 +270,8 @@ def pytest_addoption(parser):
         action="store",
         dest="sharding_mode",
         default="round-robin",
-        help="Specify sharding mode for NON-weighted sharding. Available modes: {'contiguous-split', 'round-robin'}",
+        help=
+        "Specify sharding mode for NON-weighted sharding. Available modes: {'contiguous-split', 'round-robin'}",
     )
 
 
@@ -323,17 +323,17 @@ class SelectPlugin:
         if select_config is None:
             selected_items, deselected_items, skipped_items = items, [], []
         else:
-            selected_items, deselected_items, skipped_items = self._get_selections(select_config, items)
+            selected_items, deselected_items, skipped_items = self._get_selections(
+                select_config, items)
 
         sharding_config = ShardingConfig.from_config(config)
-        if (
-            sharding_config is None and select_config is not None
-            and select_config.select_option in [SelectOption.SKIP]
-        ):
+        if (sharding_config is None and select_config is not None
+                and select_config.select_option in [SelectOption.SKIP]):
             return
 
         if sharding_config is not None:
-            selected_items, deselected_items = sharding_config.do_sharding(selected_items, deselected_items)
+            selected_items, deselected_items = sharding_config.do_sharding(
+                selected_items, deselected_items)
         items[:] = skipped_items + selected_items
         config.hook.pytest_deselected(items=deselected_items)
 
@@ -347,9 +347,11 @@ class SelectPlugin:
 
 class SelectXdistPlugin(SelectPlugin):
 
-    def _get_selections(self, select_config: SelectConfig,
-                        items) -> tuple[Optional[list[str]], Optional[list[str]], Optional[list[str]]]:
-        selected_items, deselected_items, skipped_items = super()._get_selections(select_config, items)
+    def _get_selections(
+            self, select_config: SelectConfig,
+            items) -> tuple[Optional[list[str]], Optional[list[str]], Optional[list[str]]]:
+        selected_items, deselected_items, skipped_items = super()._get_selections(
+            select_config, items)
         config = select_config.config
         if hasattr(select_config.config, "workerinput"):
             # config.workeroutput is a dict that will be transferred back to the master process

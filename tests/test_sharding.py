@@ -25,9 +25,7 @@ def {test_name}(a):
     return test_content.format(cases=cases, test_name=test_name)
 
 
-def parse_param_names(
-    test_names: dict[str, list[str]],
-) -> dict[str, dict[str, list[str]]]:
+def parse_param_names(test_names: dict[str, list[str]], ) -> dict[str, dict[str, list[str]]]:
     """
     Extract params from test names in a grouped dictionary.
 
@@ -148,12 +146,10 @@ def assert_sharding(
         assert result.ret == 0 or (result.ret == 5 and is_empty_shard)
 
         grouped = parse_tests_by_status(result.outlines)
-        assert len(
-            grouped["FAILED"].get(test_name, [])
-        ) == num_not_passed_per_shard.get("FAILED", 0)
-        assert len(
-            grouped["SKIPPED"].get(test_name, [])
-        ) == num_not_passed_per_shard.get("SKIPPED", 0)
+        assert len(grouped["FAILED"].get(test_name,
+                                         [])) == num_not_passed_per_shard.get("FAILED", 0)
+        assert len(grouped["SKIPPED"].get(test_name,
+                                          [])) == num_not_passed_per_shard.get("SKIPPED", 0)
         out = grouped["PASSED"]
 
         if len(out) == 0:
@@ -190,12 +186,16 @@ def test_even_sharding(testdir, num_tests, num_shards, sharding_mode):
 
     combined_outputs = assert_sharding(
         testdir,
-        num_not_passed_per_shard={"FAILED": 0, "SKIPPED": 0},
+        num_not_passed_per_shard={
+            "FAILED": 0,
+            "SKIPPED": 0
+        },
         num_selected=num_tests,
         num_shards=num_shards,
         test_name=test_name,
         extra_pytest_args=[
-            "--sharding-mode", sharding_mode,
+            "--sharding-mode",
+            sharding_mode,
         ],
     )
 
@@ -237,10 +237,7 @@ def test_tests_are_selected_with_sharding(testdir, select_option, sharding_mode)
     testfile = testdir.makefile(".py", test_content)
     select_file = testdir.makefile(
         ".txt",
-        *[
-            line.format(testfile=testfile.relto(testdir.tmpdir))
-            for line in select_content
-        ],
+        *[line.format(testfile=testfile.relto(testdir.tmpdir)) for line in select_content],
     )
 
     combined_passed = assert_sharding(
@@ -271,24 +268,18 @@ def test_tests_are_selected_with_sharding(testdir, select_option, sharding_mode)
 @pytest.mark.parametrize(
     ("mode", "tests_per_shard"),
     [
-        (
-            "round-robin",
-            [
-                ["0", "4", "8", "12"],
-                ["1", "5", "9", "13"],
-                ["2", "6", "10", "14"],
-                ["3", "7", "11", "15"],
-            ]
-        ),
-        (
-            "contiguous-split",
-            [
-                ["0", "1", "2", "3"],
-                ["4", "5", "6", "7"],
-                ["8", "9", "10", "11"],
-                ["12", "13", "14", "15"],
-            ]
-        ),
+        ("round-robin", [
+            ["0", "4", "8", "12"],
+            ["1", "5", "9", "13"],
+            ["2", "6", "10", "14"],
+            ["3", "7", "11", "15"],
+        ]),
+        ("contiguous-split", [
+            ["0", "1", "2", "3"],
+            ["4", "5", "6", "7"],
+            ["8", "9", "10", "11"],
+            ["12", "13", "14", "15"],
+        ]),
     ],
 )
 def test_sharding_modes(testdir, mode, tests_per_shard):
@@ -302,12 +293,16 @@ def test_sharding_modes(testdir, mode, tests_per_shard):
 
     combined_outputs = assert_sharding(
         testdir,
-        num_not_passed_per_shard={"FAILED": 0, "SKIPPED": 0},
+        num_not_passed_per_shard={
+            "FAILED": 0,
+            "SKIPPED": 0
+        },
         num_selected=num_tests,
         num_shards=num_shards,
         test_name=test_name,
         extra_pytest_args=[
-            "--sharding-mode", mode,
+            "--sharding-mode",
+            mode,
         ],
         passed_tests_per_shard=tests_per_shard,
     )
