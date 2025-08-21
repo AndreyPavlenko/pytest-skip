@@ -407,43 +407,36 @@ def test_with_regexp_as_param(testdir, option_name, select_content, exit_code, o
     result.assert_outcomes(**outcomes)
 
 
-@pytest.mark.parametrize(
-    "skipfile_str,is_regexp,test_name,params,",
-    [
-        ("file.py::test_name[r\"param-match\"]@regexp", True, "file.py::test_name", "param-match"),
-        ("test_name[r\"param-match\"]@regexp", True, "test_name", "param-match"),
-        (
-            "folder/file.py::test_name[r\"some_thing\"]@regexp/something.py::test_name/folder/test.py::test_name",
-            False,
-            None,
-            None,
-        ),
-        (
-            "folder/file.py::test_name[r\"some_thing/something.py::test_name/folder/test.py::test_name[\"not-regexp\"]",
-            False,
-            None,
-            None,
-        ),
-        (
-            "folder/file.py::test_name[r\"some_thing\"]/something.py::test_name/folder/test.py::test_name[r\"param-match\"]@regexp",
-            True,
-            "folder/file.py::test_name[r\"some_thing\"]/something.py::test_name/folder/test.py::test_name",
-            "param-match"
-        ),
-        (
-            "folder/file.py[r\"some_thing\"]",
-            False,
-            None,
-            None,
-        ),
-        (
-            "folder/file.py[r\"some_\"thing\"\"]@regexp",
-            True,
-            "folder/file.py",
-            "some_\"thing\"",
-        )
-    ]
-)
+@pytest.mark.parametrize("skipfile_str,is_regexp,test_name,params,", [
+    ("file.py::test_name[r\"param-match\"]@regexp", True, "file.py::test_name", "param-match"),
+    ("test_name[r\"param-match\"]@regexp", True, "test_name", "param-match"),
+    (
+        "folder/file.py::test_name[r\"some_thing\"]@regexp/something.py::test_name/folder/test.py::test_name",
+        False,
+        None,
+        None,
+    ),
+    (
+        "folder/file.py::test_name[r\"some_thing/something.py::test_name/folder/test.py::test_name[\"not-regexp\"]",
+        False,
+        None,
+        None,
+    ),
+    ("folder/file.py::test_name[r\"some_thing\"]/something.py::test_name/folder/test.py::test_name[r\"param-match\"]@regexp",
+     True,
+     "folder/file.py::test_name[r\"some_thing\"]/something.py::test_name/folder/test.py::test_name",
+     "param-match"), (
+         "folder/file.py[r\"some_thing\"]",
+         False,
+         None,
+         None,
+     ), (
+         "folder/file.py[r\"some_\"thing\"\"]@regexp",
+         True,
+         "folder/file.py",
+         "some_\"thing\"",
+     )
+])
 def test_regexp_match(skipfile_str, is_regexp, test_name, params):
     res_match = re.match(SelectConfig.regexp_test_name_pattern, skipfile_str)
     assert (res_match is not None) is is_regexp

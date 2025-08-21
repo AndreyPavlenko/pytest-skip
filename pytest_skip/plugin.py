@@ -49,8 +49,7 @@ class SelectConfig:
                         warnings.warn(
                             f"The skipline '{test_name}' has a regexp "
                             "suffix but doesn't contain an actual regexp. The line will be "
-                            "treated as a non-regexp."
-                        )
+                            "treated as a non-regexp.")
                         self.test_names.add(test_name[:-len(self.regexp_test_name_suffix)])
                     else:
                         test_name, regexp = match.groups()
