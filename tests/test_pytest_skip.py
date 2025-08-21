@@ -1,5 +1,5 @@
-import pytest
 import re
+import pytest
 
 from pytest_skip.plugin import SelectConfig
 
