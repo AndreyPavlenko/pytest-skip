@@ -57,10 +57,9 @@ class ShardingConfig:
     def _even_sharding(self, selected_items: list[str], deselected_items: list[str]):
         if self.mode == self.ShardingMode.ROUND_ROBIN.value:
             return self._round_robin_sharding(selected_items, deselected_items)
-        elif self.mode == self.ShardingMode.CONTIGUOUS_SPLIT.value:
+        if self.mode == self.ShardingMode.CONTIGUOUS_SPLIT.value:
             return self._contiguous_even_sharding(selected_items, deselected_items)
-        else:
-            raise ValueError(f"Unsupported sharding mode: {self.mode}")
+        raise ValueError(f"Unsupported sharding mode: {self.mode}")
 
     def _weighted_sharding(self, selected_items: list[str], deselected_items: list[str]):
         # TODO: implement
@@ -84,8 +83,8 @@ class ShardingConfig:
 
         allowed_modes = {m.value for m in cls.ShardingMode}
         if mode not in allowed_modes:
-            raise ValueError(
-                f"Invalid sharding mode: {mode}. Available modes: {', '.join(allowed_modes)}")
+            allowed_modes_str = ", ".join(allowed_modes)
+            raise ValueError(f"Invalid sharding mode: {mode}. Available modes: {allowed_modes_str}")
         # weights_filepath = config.getoption("shard_weights_file")
         weights_filepath = None
 
@@ -109,7 +108,7 @@ class ShardingConfig:
             shard_id = int(shard_id)
         except ValueError as err:
             raise ValueError("Invalid sharding configuration. '--num-shards' and '--shard-id' "
-                             f"must be integers: {err}")
+                             f"must be integers: {err}") from err
 
         if num_shards <= 0:
             raise ValueError(f"{num_shards} must be a positive number")
@@ -321,6 +320,8 @@ class SelectPlugin:
     ):
         select_config = SelectConfig.from_config(config)
         if select_config is None:
+            deselected_items: list[str]
+            skipped_items: list[str]
             selected_items, deselected_items, skipped_items = items, [], []
         else:
             selected_items, deselected_items, skipped_items = self._get_selections(
@@ -347,7 +348,7 @@ class SelectPlugin:
 
 class SelectXdistPlugin(SelectPlugin):
 
-    def _get_selections(
+    def _get_selections(  # type: ignore[override]
             self, select_config: SelectConfig,
             items) -> tuple[Optional[list[str]], Optional[list[str]], Optional[list[str]]]:
         selected_items, deselected_items, skipped_items = super()._get_selections(

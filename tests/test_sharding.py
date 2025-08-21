@@ -1,10 +1,9 @@
-import pytest
 import re
 import functools
-
 from typing import Optional
+import pytest
+
 from .conftest import SELECT_OPT, DESELECT_OPT, SKIP_OPT
-# from pytest_skip.plugin import ShardingConfig
 
 
 @functools.lru_cache
@@ -42,7 +41,7 @@ def parse_param_names(test_names: dict[str, list[str]], ) -> dict[str, dict[str,
     regexp = re.compile(r"^(.*?)\[(.+)\]$")
     result = {}
     for group, tests in test_names.items():
-        group_res = {}
+        group_res: dict[str, list[str]] = {}
         for line in tests:
             match = re.match(regexp, line)
             if match is None:
@@ -68,7 +67,7 @@ def extract_test_names(outlines: list[str]) -> dict[str, list[str]]:
     }
     """
     regexp = re.compile(r"^(.*) (FAILED|PASSED|SKIPPED).*\[\s*\d+%\]$")
-    test_names = {"FAILED": [], "PASSED": [], "SKIPPED": []}
+    test_names: dict[str, list[str]] = {"FAILED": [], "PASSED": [], "SKIPPED": []}
     for line in outlines:
         line = line.strip()
         match = re.match(regexp, line)
@@ -111,7 +110,7 @@ def merge_list_dicts(out1: dict[str, list], out2: dict[str, list]) -> dict[str, 
     return out1
 
 
-def assert_sharding(
+def assert_sharding(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments
     testdir,
     num_not_passed_per_shard: dict,
     num_selected: int,
@@ -125,7 +124,7 @@ def assert_sharding(
     Returns a dictionary with passed tests as a key and their parameters as a value.
     Output example: {"file.py::test": ["1", "2"], "file.py::test_2": ["1-1", "1-2"]}
     """
-    combined_outputs = {}
+    combined_outputs: dict[str, list[str]] = {}
 
     if num_selected > num_shards:
         shard_sizes = {
@@ -214,7 +213,7 @@ def test_even_sharding(testdir, num_tests, num_shards, sharding_mode):
 
 @pytest.mark.parametrize("select_option", [SELECT_OPT, DESELECT_OPT, SKIP_OPT])
 @pytest.mark.parametrize("sharding_mode", ["contiguous-split", "round-robin"])
-def test_tests_are_selected_with_sharding(testdir, select_option, sharding_mode):
+def test_tests_are_selected_with_sharding(testdir, select_option, sharding_mode):  # pylint: disable=too-many-locals
     num_tests = 32
     num_shards = 5
 
