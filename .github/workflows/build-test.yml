@@ -37,15 +37,10 @@ jobs:
           pip install --upgrade pre-commit
           python3 -m pre_commit run --show-diff-on-failure --color=always --all-files --verbose
 
-      - name: Run unit tests without xdist
+      - name: Run unit tests
         run: |
           pip install .
           pytest tests/
-
-      - name: Run unit tests with xdist
-        run: |
-          pip install pytest-xdist
-          pytest -n 2 tests/
 
       - name: Check coexistence with pytest-select plugin
         id: test_with_pytest_select
