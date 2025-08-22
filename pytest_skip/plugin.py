@@ -345,6 +345,7 @@ class SelectPlugin:
                 skipped_items.append(item)
             else:
                 deselected_items.append(item)
+        self.seen_test_names = select_config.seen_test_names
         return selected_items, deselected_items, skipped_items
 
     def pytest_collection_modifyitems(
