@@ -1,8 +1,8 @@
 import re
 import pytest
-from .conftest import SELECT_OPT, DESELECT_OPT, SKIP_OPT
 
 from pytest_skip.plugin import SelectConfig
+from .conftest import SELECT_OPT, DESELECT_OPT, SKIP_OPT
 
 TEST_CONTENT = """
     import pytest
