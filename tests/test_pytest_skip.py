@@ -1,5 +1,8 @@
+import re
 import pytest
 from .conftest import SELECT_OPT, DESELECT_OPT, SKIP_OPT
+
+from pytest_skip.plugin import SelectConfig
 
 TEST_CONTENT = """
     import pytest
@@ -43,6 +46,20 @@ TEST_CONTENT_WITH_NESTED_BRACKETS = """
     )
     def test_b(a, b):
         assert b in ('a[1]', '4')
+"""
+
+TEST_CONTENT_WITH_REGEXP_AS_PARAM = """
+    import pytest
+
+    @pytest.mark.parametrize(
+        ('a'),
+        (
+            "r\\"a.*\\"",
+            "r\\"abc2\\""
+        )
+    )
+    def test_a(a):
+        assert True
 """
 
 
@@ -183,6 +200,49 @@ def test_missing_selection_file_fails(testdir, option_name):
                 r"\s+- test_that_does_not_exist",
             ],
         ),
+        (
+            SKIP_OPT,
+            ["test_a[r\"1-.*\"]@regexp"],
+            0,
+            {
+                "skipped": 4
+            },
+            [],
+        ),
+        (
+            SKIP_OPT,
+            ["test_a[r\".*-[2|3]\"]@regexp"],
+            0,
+            {
+                "passed": 2,
+                "skipped": 2
+            },
+            [],
+        ),
+        (
+            SKIP_OPT,
+            ["{testfile}::test_a[r\".*-[2|3]\"]@regexp"],
+            0,
+            {
+                "passed": 2,
+                "skipped": 2
+            },
+            [],
+        ),
+        (
+            SKIP_OPT,
+            [
+                "test_a[r\"1-1\"]@regexp",
+                "{testfile}::test_a[r\"1-2\"]@regexp",
+                "test_a[r\".*-3\"]@regexp",
+            ],
+            0,
+            {
+                "passed": 1,
+                "skipped": 3
+            },
+            [],
+        ),
     ),
 )
 def test_tests_are_selected(  # pylint: disable=R0913, disable=R0917
@@ -313,3 +373,73 @@ def test_nested_brackets(testdir, option_name, select_content, exit_code, outcom
 
     assert result.ret == exit_code
     result.assert_outcomes(**outcomes)
+
+
+@pytest.mark.parametrize(
+    ("option_name", "select_content", "exit_code", "outcomes"),
+    [
+        (
+            SKIP_OPT,
+            [
+                "{testfile}::test_a[r\"a.*\"]",
+            ],
+            0,
+            {
+                "passed": 1,
+                "skipped": 1
+            },
+        ),
+    ],
+)
+def test_with_regexp_as_param(testdir, option_name, select_content, exit_code, outcomes):
+    testfile = testdir.makefile(".py", TEST_CONTENT_WITH_REGEXP_AS_PARAM)
+    args = ["-v", "-Walways"]
+    select_file = testdir.makefile(
+        ".txt",
+        *[line.format(testfile=testfile.relto(testdir.tmpdir)) for line in select_content],
+    )
+    args.extend([option_name, select_file])
+    result = testdir.runpytest(*args)
+    assert result.ret == exit_code
+    result.assert_outcomes(**outcomes)
+
+
+@pytest.mark.parametrize("skipfile_str,is_regexp,test_name,params,", [
+    ("file.py::test_name[r\"param-match\"]@regexp", True, "file.py::test_name", "param-match"),
+    ("test_name[r\"param-match\"]@regexp", True, "test_name", "param-match"),
+    (
+        "folder/file.py::test_name[r\"some_thing\"]@regexp/something.py::test_name/folder/test.py::test_name",
+        False,
+        None,
+        None,
+    ),
+    (
+        "folder/file.py::test_name[r\"some_thing/something.py::test_name/folder/test.py::test_name[\"not-regexp\"]",
+        False,
+        None,
+        None,
+    ),
+    ("folder/file.py::test_name[r\"some_thing\"]/something.py::test_name/folder/test.py::test_name[r\"param-match\"]@regexp",
+     True,
+     "folder/file.py::test_name[r\"some_thing\"]/something.py::test_name/folder/test.py::test_name",
+     "param-match"), (
+         "folder/file.py[r\"some_thing\"]",
+         False,
+         None,
+         None,
+     ), (
+         "folder/file.py[r\"some_\"thing\"\"]@regexp",
+         True,
+         "folder/file.py",
+         "some_\"thing\"",
+     )
+])
+def test_regexp_match(skipfile_str, is_regexp, test_name, params):
+    res_match = re.match(SelectConfig.regexp_test_name_pattern, skipfile_str)
+    assert (res_match is not None) is is_regexp
+    if not is_regexp:
+        return
+
+    res_test_name, res_params = res_match.groups()
+    assert res_test_name == test_name
+    assert res_params == params

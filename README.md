@@ -10,6 +10,9 @@ by adding
 - support for blank and comment lines in the selection files
 - better integration with the `pytest-xdist`, plugin warning and error messages are passed to the master node with proper stdout or stderr outputs
 - sharding functionality to distribute tests across several nodes
+- an ability to select/skip parameters combinations matching a certain regular expression.
+Put your regexp in the square brackets as a raw string and end the line with `@regexp` suffix:
+`file.py::test[r"REGEXP"]@regexp`
 
 
 Usage
@@ -45,6 +48,8 @@ Example::
     test_parametrized[1]
     test_parametrized
     tests/test_foo.py::test_other
+    test_parametrized_complex[r"[8|16]-.*-.*"]@regexp
+    tests/test_foo.py::test_params[r"int32-.*-.*"]@regexp
 
     $~ pytest --select-from-file selection.txt
     $~ pytest --deselect-from-file selection.txt
