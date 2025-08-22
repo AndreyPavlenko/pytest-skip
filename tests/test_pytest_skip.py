@@ -2,6 +2,7 @@ import re
 import pytest
 
 from pytest_skip.plugin import SelectConfig
+from .conftest import SELECT_OPT, DESELECT_OPT, SKIP_OPT
 
 # FIXME: this needs a refactoring where we make each test a structure
 # what contains the failing/passing combinations as a field
@@ -65,10 +66,6 @@ TEST_CONTENT_WITH_REGEXP_AS_PARAM = """
     def test_a(a):
         assert True
 """
-
-SELECT_OPT = "--select-from-file"
-DESELECT_OPT = "--deselect-from-file"
-SKIP_OPT = "--skip-from-file"
 
 
 @pytest.mark.parametrize("option_name", (SELECT_OPT, DESELECT_OPT))
