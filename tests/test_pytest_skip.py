@@ -3,6 +3,11 @@ import pytest
 
 from pytest_skip.plugin import SelectConfig
 
+# FIXME: this needs a refactoring where we make each test a structure
+# what contains the failing/passing combinations as a field
+TEST_CONTENT_PASSING_COMBINATIONS = ("test_a[1-1]", "test_a[1-4]")
+TEST_CONTENT_FAILING_COMBINATIONS = ("test_a[1-2]", "test_a[1-3]")
+
 TEST_CONTENT = """
     import pytest
 
@@ -272,28 +277,39 @@ def test_tests_are_selected(  # pylint: disable=R0913, disable=R0917
         result.stdout.re_match_lines_random(stdout_lines)
 
 
+@pytest.mark.parametrize("use_xdist", (False, True))
+@pytest.mark.parametrize("has_missing_tests", (False, True))
 @pytest.mark.parametrize("deselect", (False, True))
-def test_fail_on_missing(testdir, deselect):
+def test_fail_on_missing(is_xdist_installed, testdir, deselect, has_missing_tests, use_xdist):
+    if use_xdist and not is_xdist_installed:
+        pytest.skip("xdist is not installed")
+
     testdir.makefile(".py", TEST_CONTENT)
-    selectfile = testdir.makefile(".txt", "test_a[1-1]", "test_a[2-1]")
+
+    existing_tests = TEST_CONTENT_FAILING_COMBINATIONS if deselect else TEST_CONTENT_PASSING_COMBINATIONS
+    file_tests = ("test_a[1-1]", "test_a[2-1]") if has_missing_tests else existing_tests
+    selectfile = testdir.makefile(".txt", *file_tests)
     result = testdir.runpytest(
         "-v",
         "--select-fail-on-missing",
+        "-n 1" if use_xdist else "",
         f"--{'de' if deselect else ''}select-from-file",  # pylint: disable=W1405
         selectfile,
     )
-    assert result.ret == 4
+
+    assert result.ret == (4 if has_missing_tests else 0)
     if deselect:
         first_line = r"pytest-skip: Not all deselected tests exist \(or have been selected otherwise\)."
         second_line = r"Missing deselected test names:"
     else:
         first_line = r"pytest-skip: Not all selected tests exist \(or have been deselected otherwise\)."
         second_line = r"Missing selected test names:"
-    result.stderr.re_match_lines([
-        first_line,
-        second_line,
-        # "  - test_a[2-1]",
-    ])
+    if has_missing_tests:
+        result.stderr.re_match_lines([
+            first_line,
+            second_line,
+            # "  - test_a[2-1]",
+        ])
 
 
 @pytest.mark.parametrize(("fail_on_missing", "deselect"), [(True, False), (True, True),
