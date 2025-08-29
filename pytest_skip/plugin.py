@@ -11,9 +11,9 @@ from pytest import UsageError
 
 
 class SelectOption(Enum):
-    SELECT = "selectfromfile"
-    DESELECT = "deselectfromfile"
-    SKIP = "skipfromfile"
+    SELECT = ("selectfromfile", "selecttest")
+    DESELECT = ("deselectfromfile", "deselecttest")
+    SKIP = ("skipfromfile", "skiptest")
 
 
 @dataclass
@@ -203,15 +203,17 @@ class SelectConfig:
     @classmethod
     def from_config(cls, config: pytest.Config) -> Optional["SelectConfig"]:
         fail_on_missing = config.getoption("selectfailonmissing")
-        matchers: Dict[SelectOption, Optional[Matcher]] = {}
+        matchers: Dict[SelectOption, Optional[Matcher]] = {o: None for o in SelectOption}
         for option in SelectOption:
-            if (value := config.getoption(option.value)) is None:
-                matchers[option] = None
-                continue
-            matchers[option] = matcher = Matcher()
-            for path in value.split(":"):
-                if (path := path.strip()):
-                    matcher.add_from_file(path)
+            for opt in option.value:
+                if (value := config.getoption(opt)) is None:
+                    continue
+                if (matcher := matchers.get(option)) is None:
+                    matchers[option] = matcher = Matcher()
+                add_fn = matcher.add_from_file if opt.endswith("file") else matcher.add
+                for v in value.split(";"):
+                    if (v := v.strip()):
+                        add_fn(v)
         return SelectConfig(  # pylint: disable=E1120
             *tuple(matchers.values()),  # type: ignore[call-arg,arg-type]
             fail_on_missing) if any(matchers.values()) else None
@@ -238,14 +240,44 @@ def pytest_addoption(parser: pytest.Parser):
         action="store",
         dest="selectfromfile",
         default=None,
-        help="Select tests given in file. One line per test name.",
+        help=
+        "Select tests given in one or multiple, semicolon-separated, file(s). One line per test name.",
     )
     select_group.addoption(
         "--deselect-from-file",
         action="store",
         dest="deselectfromfile",
         default=None,
-        help="Deselect tests given in file. One line per test name.",
+        help=
+        "Deselect tests given in one or multiple, semicolon-separated, file(s). One line per test name.",
+    )
+    select_group.addoption(
+        "--skip-from-file",
+        action="store",
+        dest="skipfromfile",
+        default=None,
+        help="Mark tests from one or multiple, semicolon-separated, file(s) as skipped.",
+    )
+    select_group.addoption(
+        "--select-test",
+        action="store",
+        dest="selecttest",
+        default=None,
+        help="Select one or multiple, semicolon-separated, test names.",
+    )
+    select_group.addoption(
+        "--deselect-test",
+        action="store",
+        dest="deselecttest",
+        default=None,
+        help="Deselect one or multiple, semicolon-separated, test names.",
+    )
+    select_group.addoption(
+        "--skip-test",
+        action="store",
+        dest="skiptest",
+        default=None,
+        help="Mark one or multiple, comma-separated, test names as skipped.",
     )
     select_group.addoption(
         "--select-fail-on-missing",
@@ -253,13 +285,6 @@ def pytest_addoption(parser: pytest.Parser):
         dest="selectfailonmissing",
         default=False,
         help="Fail instead of warn when not all (de-)selected tests could be found.",
-    )
-    select_group.addoption(
-        "--skip-from-file",
-        action="store",
-        dest="skipfromfile",
-        default=None,
-        help="Mark tests from file as skipped.",
     )
     select_group.addoption(
         "--num-shards",
@@ -290,10 +315,12 @@ def pytest_addoption(parser: pytest.Parser):
 def pytest_report_header(config) -> List[str]:  # pylint:disable = R1710
     hdr = []
     for option in SelectOption:
-        if (value := config.getoption(option.value)) is None:
-            continue
-        action = "selecting" if option == SelectOption.SELECT else "deselecting" if option == SelectOption.DESELECT else "skipping"
-        hdr.append(f"select: {action} tests from '{value}'")
+        for opt in option.value:
+            if (value := config.getoption(opt)) is None:
+                continue
+            action = "selecting" if option == SelectOption.SELECT else "deselecting" if option == SelectOption.DESELECT else "skipping"
+            value = f"from '{value}'" if opt.endswith("file") else f"'{value}'"
+            hdr.append(f"select: {action} tests {value}")
     if config.getoption("selectfailonmissing"):
         hdr.append("select: failing on missing selection items")
     return hdr
