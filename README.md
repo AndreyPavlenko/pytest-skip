@@ -26,8 +26,9 @@ This plugin adds new command line options to pytest:
 - ``--select-fail-on-missing``
 - ``--num-shards``, ``--shard-id`` and ``--sharding-mode``
 
-The first three expect an argument that resolves to a UTF-8 encoded text file containing one test name per
-line. Text file may contain blank and comment lines (starts from `#`),
+The first three expect an argument that resolves to one or multiple, colon-separated, UTF-8 encoded text file(s)
+containing one test name per line. Text file may contain blank and comment lines (starts from `#`). All three
+(select, deselect, skip) options can be used simultaneously.
 
 The fourth one changes the behaviour in case (de-)selected or skipped test names are missing from the to-be executed tests.
 By default a warning is emitted and the remaining selected tests are executed as normal.
@@ -43,7 +44,7 @@ Both plain test names or complete node ids (e.g. ``test_file.py::test_name``) ar
 
 Example::
 
-    $~ cat selection.txt
+    $~ cat select.txt
     test_something
     test_parametrized[1]
     test_parametrized
@@ -51,11 +52,21 @@ Example::
     test_parametrized_complex[r"[8|16]-.*-.*"]@regexp
     tests/test_foo.py::test_params[r"int32-.*-.*"]@regexp
 
-    $~ pytest --select-from-file selection.txt
-    $~ pytest --deselect-from-file selection.txt
-    $~ pytest --skip-from-file selection.txt
-    $~ pytest --skip-from-file selection.txt --num-shards=4 --shard-id=0 --sharding-mode=round-robin
-    $~ pytest --skip-from-file selection.txt --num-shards=4 --shard-id=0 --sharding-mode=contiguous-split
+    $~ cat deselect.txt
+    tests/test_foo.py::test_params[r"bf32-.*-.*"]@regexp
+
+    $~ cat skip1.txt
+    test_parametrized[1]
+    test_parametrized[2]
+
+    $~ cat skip2.txt
+    test_parametrized[r"[579]"]@regexp
+
+    $~ pytest --select-from-file select.txt
+    $~ pytest --deselect-from-file deselect.txt
+    $~ pytest --select-from-file select.txt --deselect-from-file deselect.txt --skip-from-file skip1.txt:skip2.txt
+    $~ pytest --skip-from-file skip1.txt:skip2.txt --num-shards=4 --shard-id=0 --sharding-mode=round-robin
+    $~ pytest --skip-from-file skip1.txt:skip2.txt --num-shards=4 --shard-id=0 --sharding-mode=contiguous-split
 
 
 Install from source

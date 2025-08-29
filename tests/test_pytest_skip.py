@@ -1,7 +1,8 @@
-import re
+import itertools
 import pytest
 
-from pytest_skip.plugin import SelectConfig
+from pytest import ExitCode
+from pytest_skip.plugin import Matcher
 from .conftest import SELECT_OPT, DESELECT_OPT, SKIP_OPT
 
 # FIXME: this needs a refactoring where we make each test a structure
@@ -23,6 +24,18 @@ TEST_CONTENT = """
     )
     def test_a(a, b):
         assert b in (1, 4)
+"""
+
+TEST_CONTENT_PASS = """
+    import pytest
+    import itertools
+
+    @pytest.mark.parametrize(
+        ('a', 'b', 'c'),
+        list(itertools.product((1, 2, 3), repeat=3))
+    )
+    def test_a(a, b, c):
+        pass
 """
 
 TEST_CONTENT_WITH_NESTED_BRACKETS = """
@@ -77,14 +90,6 @@ def test_select_options_exist(testdir, option_name):
     assert result.ret == 5
 
 
-def test_select_options_conflict(testdir):
-    result = testdir.runpytest(SELECT_OPT, "smth", DESELECT_OPT, "smth")
-
-    assert result.ret == 4
-    result.stderr.re_match_lines(
-        [f"ERROR: '{SELECT_OPT}', '{DESELECT_OPT}' and '{SKIP_OPT}' cannot be used together."])
-
-
 @pytest.mark.parametrize("option_name", (SELECT_OPT, DESELECT_OPT))
 def test_missing_selection_file_fails(testdir, option_name):
     missing_file_name = "no_such_file.txt"
@@ -128,8 +133,8 @@ def test_missing_selection_file_fails(testdir, option_name):
                 "failed": 2
             },
             [
-                r".*Not all selected tests exist \(or have been deselected otherwise\).*",
-                r"\s+Missing selected test names:",
+                r".*Not all tests to select exist.*",
+                r"\s+Missing test names to select:",
                 r"\s+- test_a\[3-1\]",
                 r"\s+- test_that_does_not_exist",
             ],
@@ -160,8 +165,8 @@ def test_missing_selection_file_fails(testdir, option_name):
                 "passed": 2
             },
             [
-                r".*Not all deselected tests exist \(or have been selected otherwise\).*",
-                r"\s+Missing deselected test names:",
+                r".*Not all tests to deselect exist.*",
+                r"\s+Missing test names to deselect:",
                 r"\s+- test_a\[3-1\]",
                 r"\s+- test_that_does_not_exist",
             ],
@@ -199,7 +204,7 @@ def test_missing_selection_file_fails(testdir, option_name):
                 "skipped": 2
             },
             [
-                r".*Not all tests to skip exist \(or have been not skipped otherwise\).*",
+                r".*Not all tests to skip exist.*",
                 r"\s+Missing test names to skip:",
                 r"\s+- test_a\[3-1\]",
                 r"\s+- test_that_does_not_exist",
@@ -296,11 +301,11 @@ def test_fail_on_missing(is_xdist_installed, testdir, deselect, has_missing_test
 
     assert result.ret == (4 if has_missing_tests else 0)
     if deselect:
-        first_line = r"pytest-skip: Not all deselected tests exist \(or have been selected otherwise\)."
-        second_line = r"Missing deselected test names:"
+        first_line = r"pytest-skip: Not all tests to deselect exist."
+        second_line = r"Missing test names to deselect:"
     else:
-        first_line = r"pytest-skip: Not all selected tests exist \(or have been deselected otherwise\)."
-        second_line = r"Missing selected test names:"
+        first_line = r"pytest-skip: Not all tests to select exist."
+        second_line = r"Missing test names to select:"
     if has_missing_tests:
         result.stderr.re_match_lines([
             first_line,
@@ -323,10 +328,11 @@ def test_report_header(testdir, fail_on_missing, deselect):
         args.append("--select-fail-on-missing")
     result = testdir.runpytest(*args)
 
-    failing_suffix = ", failing on missing selection items" if fail_on_missing else ""
     deselect_prefix = "de" if deselect else ""
-    result.stdout.re_match_lines(
-        [fr"select: {deselect_prefix}selecting tests from '{selectfile}'{failing_suffix}$"])
+    lines = [fr"select: {deselect_prefix}selecting tests from '{selectfile}'$"]
+    if fail_on_missing:
+        lines.append(r"select: failing on missing selection items$")
+    result.stdout.re_match_lines(lines)
 
 
 @pytest.mark.parametrize(
@@ -451,7 +457,7 @@ def test_with_regexp_as_param(testdir, option_name, select_content, exit_code, o
      )
 ])
 def test_regexp_match(skipfile_str, is_regexp, test_name, params):
-    res_match = re.match(SelectConfig.regexp_test_name_pattern, skipfile_str)
+    res_match = Matcher.regexp_test_name_pattern.match(skipfile_str)
     assert (res_match is not None) is is_regexp
     if not is_regexp:
         return
@@ -459,3 +465,44 @@ def test_regexp_match(skipfile_str, is_regexp, test_name, params):
     res_test_name, res_params = res_match.groups()
     assert res_test_name == test_name
     assert res_params == params
+
+
+@pytest.mark.parametrize("select", (None, ("test_a", ), ("test_a[1-1-1]", ),
+                                    ("test_a[1-1-2]", "test_a[1-2-3]", "test_a[3-2-1]")))
+@pytest.mark.parametrize("deselect", (("test_a", ), ("test_a[1-1-2]", "test_a[1-2-3]")))
+@pytest.mark.parametrize("skip",
+                         (("test_a", ), ("test_a[3-3-3]", ), ("test_a[1-2-3]", "test_a[3-2-1]")))
+@pytest.mark.parametrize("use_sharding", (False, True))
+def test_select_deselect_skip(testdir, select, deselect, skip, use_sharding):
+    node_ids = [f"test_a[{a}-{b}-{c}]" for a, b, c in itertools.product((1, 2, 3), repeat=3)]
+    testfile = testdir.makefile(".py", TEST_CONTENT_PASS)
+    args = ["-v", "-Walways"]
+    if use_sharding:
+        args.append("--num-shards=1")
+        args.append("--shard-id=0")
+
+    def process_values(opt, values):
+        if values is None:
+            return set(node_ids) if opt is SELECT_OPT else set()
+        sfx = "select" if opt is SELECT_OPT else "deselect" if opt is DESELECT_OPT else "skip"
+        files = [
+            testdir.makefile(
+                f".{sfx}{i}.txt",
+                l.format(testfile=testfile.relto(testdir.tmpdir)),
+            ).strpath for i, l in enumerate(values)
+        ]
+        args.extend([opt, ":".join(files)])
+        return set(node_ids) if "test_a" in values else set(values)
+
+    select = process_values(SELECT_OPT, select)
+    deselect = process_values(DESELECT_OPT, deselect)
+    skip = process_values(SKIP_OPT, skip)
+    deselect.intersection_update(select)
+    skip.intersection_update(select)
+    select.difference_update(deselect)
+    skip.difference_update(deselect)
+    select.difference_update(skip)
+
+    result = testdir.runpytest(*args)
+    assert result.ret == ExitCode.OK if select else ExitCode.NO_TESTS_COLLECTED
+    result.assert_outcomes(passed=len(select), deselected=len(deselect), skipped=len(skip))
