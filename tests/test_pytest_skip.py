@@ -485,13 +485,18 @@ def test_select_deselect_skip(testdir, select, deselect, skip, use_sharding):
         if values is None:
             return set(node_ids) if opt is SELECT_OPT else set()
         sfx = "select" if opt is SELECT_OPT else "deselect" if opt is DESELECT_OPT else "skip"
+        mid = len(values) // 2
         files = [
             testdir.makefile(
                 f".{sfx}{i}.txt",
                 l.format(testfile=testfile.relto(testdir.tmpdir)),
-            ).strpath for i, l in enumerate(values)
+            ).strpath for i, l in enumerate(values[:mid])
         ]
-        args.extend([opt, ":".join(files)])
+        names = values[mid:]
+        if files:
+            args.extend([opt, ";".join(files)])
+        if names:
+            args.extend([f"{opt[:-9]}test", ";".join(names)])
         return set(node_ids) if "test_a" in values else set(values)
 
     select = process_values(SELECT_OPT, select)

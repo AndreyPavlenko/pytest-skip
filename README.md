@@ -23,14 +23,19 @@ This plugin adds new command line options to pytest:
 - ``--select-from-file``
 - ``--deselect-from-file``
 - ``--skip-from-file``
+- ``--select-test``
+- ``--deselect-test``
+- ``--skip-from-test``
 - ``--select-fail-on-missing``
 - ``--num-shards``, ``--shard-id`` and ``--sharding-mode``
 
-The first three expect an argument that resolves to one or multiple, colon-separated, UTF-8 encoded text file(s)
+The first three expect an argument that resolves to one or multiple, semicolon-separated, UTF-8 encoded text file(s)
 containing one test name per line. Text file may contain blank and comment lines (starts from `#`). All three
 (select, deselect, skip) options can be used simultaneously.
 
-The fourth one changes the behaviour in case (de-)selected or skipped test names are missing from the to-be executed tests.
+The next three expect one or multiple, semicolon-separated, test names to be selected, deselected or skipped.
+
+The next one changes the behaviour in case (de-)selected or skipped test names are missing from the to-be executed tests.
 By default a warning is emitted and the remaining selected tests are executed as normal.
 By using the ``--select-fail-on-missing`` flag this behaviour can be changed to instead abort execution in that case.
 
