@@ -105,6 +105,12 @@ the maximum command length.
 
 Version History
 ---------------
+- ``v0.2.0`` - 9/12/2025:
+    - Added sharding functionality (`--num-shards`, `--shard-id`, `--sharding-mode`) to distribute tests across multiple nodes
+    - Added ability to (de-)select or skip tests directly by name (`--select-test`, `--deselect-test`, `--skip-test`)
+    - Extended `--*-from-file` options to accept multiple, semicolon-separated files simultaneously
+    - Introduced support for selecting/skipping parameter combinations with regular expressions using the `@regexp` syntax
+    - Improved integration of simultaneous use of `--select-from-file`, `--deselect-from-file`, and `--skip-from-file`
 
 - ``v0.1.0`` - 4/4/2025:
     - Initial release
